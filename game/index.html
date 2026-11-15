@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neon Dojo District — a three.js tactical FPS</title>
+<style>
+  :root {
+    --black: #07060a;
+    --panel: #14101d;
+    --line: #33262f;
+    --paper: #f2e9dc;
+    --dim: #9b93a8;
+    --magenta: #ff2e88;
+    --cyan: #22e6ff;
+    --gold: #ffc44d;
+    --blood: #ff4747;
+    --font-ui: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-num: ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--black); color: var(--paper); font-family: var(--font-ui); }
+  #game, #game canvas { position: fixed; inset: 0; display: block; }
+  #hud { position: fixed; inset: 0; pointer-events: none; }
+  #crosshair { position: fixed; left: 50%; top: 50%; width: 30px; height: 30px; transform: translate(-50%, -50%); --gap: 7px; }
+  #crosshair i { position: absolute; background: var(--cyan); box-shadow: 0 0 4px var(--cyan); }
+  #crosshair i:nth-child(1) { left: 14px; top: calc(50% - var(--gap) - 7px); width: 2px; height: 7px; }
+  #crosshair i:nth-child(2) { left: 14px; top: calc(50% + var(--gap)); width: 2px; height: 7px; }
+  #crosshair i:nth-child(3) { top: 14px; left: calc(50% - var(--gap) - 7px); height: 2px; width: 7px; }
+  #crosshair i:nth-child(4) { top: 14px; left: calc(50% + var(--gap)); height: 2px; width: 7px; }
+  #hitmarker { position: fixed; left: 50%; top: 50%; width: 28px; height: 28px; transform: translate(-50%, -50%) rotate(45deg); opacity: 0; --hm: var(--paper); }
+  #hitmarker.on { opacity: 1; }
+  #hitmarker i { position: absolute; background: var(--hm); }
+  #hitmarker i:nth-child(1) { left: 13px; top: 0; width: 2px; height: 8px; }
+  #hitmarker i:nth-child(2) { left: 13px; bottom: 0; width: 2px; height: 8px; }
+  #hitmarker i:nth-child(3) { top: 13px; left: 0; height: 2px; width: 8px; }
+  #hitmarker i:nth-child(4) { top: 13px; right: 0; height: 2px; width: 8px; }
+  #hurt { position: fixed; inset: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(255, 40, 60, 0.4) 100%); opacity: 0; transition: opacity 120ms; }
+  #hurt.on { opacity: 1; }
+  .topbar { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); text-align: center; font-family: var(--font-num); }
+  #team-score { font-size: 15px; letter-spacing: 0.08em; color: var(--paper); text-shadow: 0 0 8px rgba(255,46,136,.6); }
+  #round-label { font-size: 11px; color: var(--dim); letter-spacing: 0.14em; margin-top: 2px; }
+  #timer { font-size: 26px; margin-top: 2px; }
+  #timer.low { color: var(--blood); }
+  #money { position: fixed; top: 16px; left: 20px; font-family: var(--font-num); font-size: 24px; color: var(--gold); }
+  #orb-count { position: fixed; top: 50px; left: 20px; font-family: var(--font-num); font-size: 14px; color: var(--magenta); }
+  #feed { position: fixed; top: 16px; right: 20px; text-align: right; font-size: 13px; color: var(--dim); display: grid; gap: 4px; }
+  #feed div { transition: opacity 500ms; }
+  #feed div.fade { opacity: 0; }
+  #feed b { color: var(--paper); font-weight: 600; }
+  .bottomleft { position: fixed; left: 20px; bottom: 20px; width: 220px; }
+  #hp-text { font-family: var(--font-num); font-size: 34px; line-height: 1; }
+  #hp-text small { font-size: 12px; color: var(--dim); letter-spacing: 0.1em; }
+  .hp-track { height: 8px; background: #241a2e; border: 1px solid var(--line); margin-top: 6px; }
+  #hp-bar { height: 100%; width: 100%; background: var(--cyan); transition: width 150ms; }
+  #ammo { position: fixed; right: 20px; bottom: 20px; text-align: right; font-family: var(--font-num); }
+  #weapon-name { font-size: 12px; color: var(--dim); letter-spacing: 0.12em; }
+  #ammo-line { font-size: 44px; line-height: 1; }
+  #ammo.empty #ammo-mag { color: var(--blood); }
+  #ammo-reserve { font-size: 16px; color: var(--dim); }
+  #banner { position: fixed; top: 22%; left: 50%; transform: translateX(-50%); font-size: 30px; font-weight: 700; letter-spacing: 0.06em; opacity: 0; transition: opacity 200ms; text-shadow: 0 0 14px rgba(34,230,255,.7); white-space: nowrap; }
+  #banner.on { opacity: 1; }
+  #capture-wrap { position: fixed; bottom: 110px; left: 50%; transform: translateX(-50%); width: 300px; display: none; text-align: center; }
+  #capture-label { font-size: 12px; letter-spacing: 0.14em; color: var(--gold); margin-bottom: 5px; }
+  .cap-track { height: 7px; background: #241a2e; border: 1px solid var(--line); }
+  #capture-bar { height: 100%; width: 0%; background: var(--gold); }
+  .overlay { position: fixed; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(7, 6, 10, 0.78); pointer-events: auto; }
+  .overlay[hidden] { display: none; }
+  .panel { width: min(560px, 100%); max-height: 92vh; overflow: auto; padding: 26px 28px; background: var(--panel); border: 1px solid var(--magenta); box-shadow: 0 0 32px rgba(255,46,136,.25), inset 0 0 0 1px rgba(34,230,255,.15); }
+  .panel h1 { margin: 0 0 8px; font-size: 34px; letter-spacing: 0.02em; color: var(--paper); text-shadow: 2px 2px 0 var(--magenta), -2px -2px 0 rgba(34,230,255,.55); }
+  .panel p { margin: 0 0 12px; font-size: 15px; line-height: 1.55; color: var(--dim); }
+  #overlay-extra { font-size: 13px; color: var(--gold); font-family: var(--font-num); }
+  #play { font: inherit; font-weight: 700; letter-spacing: 0.06em; padding: 12px 22px; border: 1px solid var(--cyan); background: var(--cyan); color: var(--black); cursor: pointer; margin-top: 8px; }
+  #play:hover { background: var(--magenta); border-color: var(--magenta); color: #fff; }
+  #buy-shelf { display: none; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+  .buy-item { font: inherit; font-size: 13px; text-align: left; padding: 9px 10px; background: #1d1526; color: var(--paper); border: 1px solid var(--line); cursor: pointer; }
+  .buy-item span { display: block; color: var(--gold); font-family: var(--font-num); font-size: 12px; margin-top: 2px; }
+  .buy-item b { color: var(--cyan); margin-right: 6px; }
+  .buy-item:disabled { opacity: 0.38; cursor: default; }
+  .buy-item:not(:disabled):hover { border-color: var(--cyan); }
+  .keys { margin: 16px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 13px; color: var(--dim); }
+  .keys kbd { min-width: 22px; display: inline-block; padding: 1px 5px; border: 1px solid var(--line); font-family: var(--font-num); font-size: 11px; color: var(--paper); text-align: center; }
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="hud" aria-hidden="true">
+  <div id="hurt"></div>
+  <div id="crosshair"><i></i><i></i><i></i><i></i></div>
+  <div id="hitmarker"><i></i><i></i><i></i><i></i></div>
+  <div class="topbar">
+    <div id="team-score">LANTERN 0 — 0 RONIN</div>
+    <div id="round-label">ROUND 1 · BUY</div>
+    <div id="timer">0:12</div>
+  </div>
+  <div id="money">$800</div>
+  <div id="orb-count">◉ 0</div>
+  <div id="feed"></div>
+  <div id="banner"></div>
+  <div id="capture-wrap"><div id="capture-label">SECURING THE DOJO</div><div class="cap-track"><div id="capture-bar"></div></div></div>
+  <div class="bottomleft">
+    <div id="hp-text">100 <small>HP · LANTERN WATCH</small></div>
+    <div class="hp-track"><div id="hp-bar"></div></div>
+  </div>
+  <div id="ammo">
+    <div id="weapon-name">KOI-9 SIDEARM</div>
+    <div id="ammo-line"><span id="ammo-mag">12</span><span id="ammo-reserve">/ 60</span></div>
+  </div>
+</div>
+<div id="overlay" class="overlay">
+  <section class="panel" role="dialog" aria-modal="true" aria-labelledby="overlay-title">
+    <h1 id="overlay-title">NEON DOJO DISTRICT</h1>
+    <p id="overlay-copy"></p>
+    <p id="overlay-extra"></p>
+    <button id="play" type="button">PLAY</button>
+    <div id="buy-shelf"></div>
+    <ul class="keys">
+      <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move &nbsp; <kbd>Mouse</kbd> Aim &nbsp; <kbd>Click</kbd> Fire</li>
+      <li><kbd>Ctrl</kbd>/<kbd>C</kbd> Crouch (tighter aim) &nbsp; <kbd>Space</kbd> Jump &nbsp; <kbd>R</kbd> Reload</li>
+      <li><kbd>1</kbd>–<kbd>5</kbd> Weapons &nbsp; <kbd>G</kbd> Throw Pulse Orb &nbsp; <kbd>1</kbd>–<kbd>6</kbd> Buy on the shelf</li>
+    </ul>
+  </section>
+</div>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/three.module.min.js"
+  }
+}
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
