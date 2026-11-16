@@ -167,17 +167,23 @@ export function createBots(scene, colliders, random) {
           if (bot.burstLeft <= 0) bot.burstWait = 0.55 + random() * 0.5;
         }
       } else {
-        const goal = bot.state === 'hunt' && bot.lastHeard ? bot.lastHeard
+        // Defuse run: if the enemy owns visible progress on the ring and no
+        // target is in sight, drop everything and get to the ring — standing
+        // there alone is what rewinds (reclaims) their progress.
+        const defend = ctx.defendObjective ? ctx.defendObjective(bot) : false;
+        const goal = defend ? CAPTURE_POINT
+          : bot.state === 'hunt' && bot.lastHeard ? bot.lastHeard
           : (ctx.objectiveBias(bot) ? CAPTURE_POINT : WAYPOINTS[bot.waypoint]);
         tmpDir.set(goal.x - bot.position.x, 0, goal.z - bot.position.z);
         const dist = tmpDir.length();
         if (dist < 1.4) {
-          if (bot.state === 'hunt') bot.lastHeard = null;
-          else if (!ctx.objectiveBias(bot)) bot.waypoint = Math.floor(random() * WAYPOINTS.length);
+          if (bot.state === 'hunt' && !defend) bot.lastHeard = null;
+          else if (!defend && !ctx.objectiveBias(bot)) bot.waypoint = Math.floor(random() * WAYPOINTS.length);
+          // While defending, arriving means holding the ring, not moving on.
         } else {
           bot.yaw = Math.atan2(-tmpDir.x, -tmpDir.z);
           moveX = tmpDir.x / dist; moveZ = tmpDir.z / dist;
-          speed = bot.state === 'hunt' ? 3.9 : 3.2;
+          speed = bot.state === 'hunt' || defend ? 3.9 : 3.2;
         }
       }
 

@@ -45,18 +45,34 @@ export function createHud() {
       clearTimeout(bannerEl._t);
       bannerEl._t = setTimeout(() => bannerEl.classList.remove('on'), holdMs);
     },
-    feed(text) {
+    // Callers pass small trusted markup (<b> names, a HEADSHOT tag) built from
+    // the fixed bot roster — never player-typed text — so innerHTML is the
+    // correct sink here; textContent used to print the tags literally.
+    feed(html, cls = '') {
       const row = document.createElement('div');
-      row.textContent = text;
+      if (cls) row.className = cls;
+      row.innerHTML = html;
       feedEl.appendChild(row);
       while (feedEl.children.length > 5) feedEl.removeChild(feedEl.firstChild);
       setTimeout(() => { row.classList.add('fade'); setTimeout(() => row.remove(), 600); }, 3400);
     },
-    hitMarker(killed, holdMs = 110) {
+    hitMarker(killed, holdMs = 110, headshot = false) {
       hitmarker.classList.add('on');
-      hitmarker.style.setProperty('--hm', killed ? 'var(--magenta)' : 'var(--paper)');
+      // Gold means the head: a headshot hit or kill reads instantly apart
+      // from a magenta body kill and a paper body hit.
+      hitmarker.style.setProperty('--hm', headshot ? 'var(--gold)' : killed ? 'var(--magenta)' : 'var(--paper)');
       clearTimeout(hitTimer);
-      hitTimer = setTimeout(() => hitmarker.classList.remove('on'), holdMs);
+      hitTimer = setTimeout(() => hitmarker.classList.remove('on'), headshot ? Math.max(holdMs, 170) : holdMs);
+    },
+    // Directional damage cue: rotate the arc so its notch points toward the
+    // shooter relative to where the player is facing (0 = dead ahead).
+    hurtDirection(relAngle) {
+      const arc = el('hurt-dir');
+      if (!arc) return;
+      arc.style.transform = `translate(-50%, -50%) rotate(${relAngle}rad)`;
+      arc.classList.add('on');
+      clearTimeout(arc._t);
+      arc._t = setTimeout(() => arc.classList.remove('on'), 650);
     },
     hurtFlash() { hurtEl.classList.add('on'); setTimeout(() => hurtEl.classList.remove('on'), 130); },
     setCapture(frac, label) {
@@ -84,7 +100,7 @@ export function createHud() {
       overlay.hidden = false;
       if (mode === 'start') {
         ovTitle.textContent = 'NEON DOJO DISTRICT';
-        ovCopy.textContent = 'Night market, one dojo, two crews. Lantern Watch (cyan, yours) against the Magenta Ronin. Win rounds by wiping the Ronin or holding the dojo ring. First crew to 5 rounds takes the district.';
+        ovCopy.textContent = 'Night market, one dojo, two crews. Lantern Watch (cyan, yours) against the Magenta Ronin. Win rounds by wiping the Ronin or holding the dojo ring. If the Ronin are securing the ring, clear it and stand in it alone to reclaim — their progress rewinds fast while you hold it. First crew to 5 rounds takes the district.';
         ovExtra.textContent = 'Click PLAY, spend your cash on the buy shelf, then deploy. WASD move · mouse aim · Ctrl crouch · R reload · G Pulse Orb · keys 1-5 switch weapons.';
         playBtn.textContent = 'PLAY';
       } else if (mode === 'paused') {

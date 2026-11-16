@@ -56,6 +56,10 @@ export function createAudio() {
     dry() { tone(1200, 900, 0.04, 'square', 0.15); },
     reload() { tone(500, 300, 0.06, 'square', 0.2); tone(700, 420, 0.06, 'square', 0.2, 0.16); },
     hit() { tone(1500, 1100, 0.05, 'square', 0.22); },
+    // Headshots must sound different at a glance: a bright double-ping an
+    // octave above the body-hit tick, so the ear learns before the eye does.
+    headshot() { tone(2300, 1900, 0.05, 'square', 0.26); tone(2900, 2400, 0.06, 'square', 0.2, 0.045); },
+    reclaimDone() { tone(1320, 1320, 0.07, 'sine', 0.24); tone(990, 990, 0.09, 'sine', 0.24, 0.08); },
     kill() { tone(880, 1320, 0.12, 'triangle', 0.3); tone(1320, 1760, 0.1, 'triangle', 0.22, 0.08); },
     hurt() { tone(160, 70, 0.16, 'sawtooth', 0.3); },
     buy() { tone(990, 990, 0.06, 'sine', 0.25); tone(1480, 1480, 0.08, 'sine', 0.25, 0.07); },

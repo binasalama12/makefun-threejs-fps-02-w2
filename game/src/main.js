@@ -13,13 +13,13 @@ import { createLoadout } from './gun.js';
 import { createBots } from './bots.js';
 import { createHud } from './hud.js';
 import { createAudio } from './audio.js';
+import { createObjective } from './objective.js';
 import { WEAPONS, GRENADE, weaponById } from './weapons.js';
 
 const FIXED = 1 / 60;
 const ROUND_TIME = 75;
 const BUY_TIME = 12;
 const WIN_SCORE = 5;
-const CAPTURE_TIME = 5;
 
 const params = new URLSearchParams(window.location.search);
 const shotMode = params.get('shot');
@@ -50,6 +50,7 @@ const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerH
 scene.add(camera);
 
 const world = createWorld(scene);
+const objective = createObjective();
 const bots = createBots(scene, world.colliders, random);
 const player = createPlayer(world.colliders);
 const loadout = createLoadout(camera);
@@ -158,6 +159,7 @@ function startBuyPhase() {
   S.phase = 'buy';
   S.timer = BUY_TIME;
   S.captureTeam = null; S.captureProg = 0; S.pendingEnd = 0;
+  objective.reset();
   player.resetSpawn();
   bots.reset();
   loadout.refillAll();
@@ -240,11 +242,11 @@ function playerShoot(forceSpread = null) {
         const fall = Math.max(0.45, 1 - hit.distance / (c.def.range * 1.6));
         const dmg = c.def.damage * (head ? c.def.headMult : 1) * fall;
         const killed = bots.damage(target, dmg);
-        hud.hitMarker(killed, shotMode ? 4000 : 110);
-        if (soundOn) audio.hit();
+        hud.hitMarker(killed, shotMode ? 4000 : 110, head);
+        if (soundOn) head ? audio.headshot() : audio.hit();
         if (killed) {
           S.kills += 1; S.money += 300;
-          hud.feed(`<b>You</b> ▸ ${target.name} · +$300`);
+          hud.feed(`<b>You</b> ▸ ${target.name}${head ? ' · <span class="hs">HEADSHOT</span>' : ''} · +$300`);
           if (soundOn) audio.kill();
         }
       }
@@ -277,6 +279,7 @@ const botCtx = {
     return best;
   },
   objectiveBias(bot) { return S.liveElapsed > 22; },
+  defendObjective(bot) { return objective.defendUrgency(bot.team); },
   botShoot(bot, target) {
     const def = weaponById(bot.weaponId);
     bot.cooldown = 60 / def.rpm * (0.9 + random() * 0.3);
@@ -297,6 +300,13 @@ const botCtx = {
     if (target.kind === 'player') {
       body.hp -= dmg;
       hud.hurtFlash();
+      // Point the damage arc toward the shooter relative to facing:
+      // rel = atan2(d·right, d·forward), forward = (-sin yaw, -cos yaw),
+      // right = (cos yaw, -sin yaw) in xz.
+      const dx = bot.position.x - body.position.x, dz = bot.position.z - body.position.z;
+      const dotR = dx * Math.cos(body.yaw) - dz * Math.sin(body.yaw);
+      const dotF = -dx * Math.sin(body.yaw) - dz * Math.cos(body.yaw);
+      hud.hurtDirection(Math.atan2(dotR, dotF));
       if (soundOn) audio.hurt();
       if (body.hp <= 0 && body.alive) {
         body.alive = false; body.hp = 0; S.deaths += 1;
@@ -306,7 +316,7 @@ const botCtx = {
       }
     } else {
       const killed = bots.damage(target.bot, dmg);
-      if (killed) hud.feed(`<b>${bot.name}</b> ▸ ${target.bot.name}`);
+      if (killed) hud.feed(`<b>${bot.name}</b> ▸ ${target.bot.name}${head ? ' · <span class="hs">HEADSHOT</span>' : ''}`);
     }
     refreshHud();
   },
@@ -377,25 +387,28 @@ function stepLive(dt) {
   }
   boomFlash = Math.max(0, boomFlash - dt);
   boomLight.intensity = boomFlash > 0 ? 90 : 0;
-  // Capture ring: a lone crew on the ring bends it toward a round win.
+  // Capture ring: headcounts go into the objective machine (objective.js),
+  // which owns progress, the contested freeze and the defender reclaim —
+  // this mode's defuse: a defender alone on the ring rewinds enemy progress
+  // fast, and wiping it to zero announces the reclaim in the feed.
   let lIn = 0, rIn = 0;
   if (body.alive && body.position.distanceTo(CAPTURE_POINT) < CAPTURE_RADIUS && body.position.y < 1) lIn += 1;
   for (const b of bots.bots) {
     if (!b.alive || b.position.distanceTo(CAPTURE_POINT) >= CAPTURE_RADIUS) continue;
     if (b.team === 'lantern') lIn += 1; else rIn += 1;
   }
-  if (lIn > 0 && rIn === 0) {
-    if (S.captureTeam !== 'lantern') { S.captureTeam = 'lantern'; S.captureProg = 0; }
-    S.captureProg += dt / CAPTURE_TIME;
-  } else if (rIn > 0 && lIn === 0) {
-    if (S.captureTeam !== 'ronin') { S.captureTeam = 'ronin'; S.captureProg = 0; }
-    S.captureProg += dt / CAPTURE_TIME;
-  } else {
-    S.captureProg = Math.max(0, S.captureProg - dt / (CAPTURE_TIME * 2.4));
-    if (S.captureProg === 0) S.captureTeam = null;
+  const objEvent = objective.update(dt, lIn, rIn);
+  S.captureTeam = objective.team; S.captureProg = objective.prog;
+  if (objEvent === 'reclaimed') {
+    hud.feed('<b>Objective reclaimed</b> — ring progress wiped');
+    hud.banner('DOJO RECLAIMED', 1100);
+    if (soundOn) audio.reclaimDone();
   }
   if (S.captureProg > 0 && Math.floor(S.liveElapsed * 2) !== Math.floor((S.liveElapsed - dt) * 2) && soundOn) audio.captureTick();
-  hud.setCapture(S.captureProg, S.captureTeam === 'ronin' ? 'RONIN SECURING THE DOJO' : 'SECURING THE DOJO');
+  const capLabel = objective.reclaiming
+    ? (S.captureTeam === 'ronin' ? 'LANTERN RECLAIMING THE DOJO' : 'RONIN RECLAIMING THE DOJO')
+    : (S.captureTeam === 'ronin' ? 'RONIN SECURING THE DOJO' : 'SECURING THE DOJO');
+  hud.setCapture(S.captureProg, capLabel);
   world.captureRing.material.opacity = 0.45 + S.captureProg * 0.55;
   world.captureRing.material.color.set(S.captureTeam === 'ronin' ? PALETTE.magenta : PALETTE.gold);
 
@@ -405,8 +418,8 @@ function stepLive(dt) {
   }
   if (enemiesAlive().length === 0) { endRound(true, 'Every Ronin is down. Elimination.'); return; }
   if (!body.alive && alliesAlive().length === 0) { endRound(false, 'Lantern Watch wiped out.'); return; }
-  if (S.captureProg >= 1) {
-    if (S.captureTeam === 'lantern') endRound(true, 'Your crew held the dojo ring. Objective taken.');
+  if (objEvent === 'lantern' || objEvent === 'ronin') {
+    if (objEvent === 'lantern') endRound(true, 'Your crew held the dojo ring. Objective taken.');
     else endRound(false, 'The Ronin held the dojo ring. Objective lost.');
     return;
   }
@@ -520,6 +533,7 @@ function stageShot(mode) {
     playerShoot(0);
     c.mag = 17;
     S.captureProg = 0.45; S.captureTeam = 'lantern';
+    objective.set('lantern', 0.45);
     hud.setCapture(0.45, 'SECURING THE DOJO');
     hud.feed('<b>You</b> ▸ Juno · +$300');
     hud.feed('<b>Aiko</b> ▸ Momo-9');

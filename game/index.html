@@ -48,6 +48,10 @@
   #feed div { transition: opacity 500ms; }
   #feed div.fade { opacity: 0; }
   #feed b { color: var(--paper); font-weight: 600; }
+  #feed .hs { color: var(--gold); font-weight: 700; }
+  #hurt-dir { position: fixed; left: 50%; top: 50%; width: 120px; height: 120px; transform: translate(-50%, -50%); opacity: 0; transition: opacity 200ms; }
+  #hurt-dir.on { opacity: 1; }
+  #hurt-dir i { position: absolute; left: 50%; top: 0; width: 34px; height: 10px; transform: translateX(-50%); background: var(--blood); clip-path: polygon(50% 0, 100% 100%, 0 100%); box-shadow: 0 0 8px var(--blood); }
   .bottomleft { position: fixed; left: 20px; bottom: 20px; width: 220px; }
   #hp-text { font-family: var(--font-num); font-size: 34px; line-height: 1; }
   #hp-text small { font-size: 12px; color: var(--dim); letter-spacing: 0.1em; }
@@ -86,6 +90,7 @@
 <div id="game"></div>
 <div id="hud" aria-hidden="true">
   <div id="hurt"></div>
+  <div id="hurt-dir"><i></i></div>
   <div id="crosshair"><i></i><i></i><i></i><i></i></div>
   <div id="hitmarker"><i></i><i></i><i></i><i></i></div>
   <div class="topbar">
