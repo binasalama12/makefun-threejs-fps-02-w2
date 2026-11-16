@@ -87,10 +87,13 @@ export function createHud() {
       const items = [...WEAPONS.map((w) => ({ ...w, key: '' })), { ...GRENADE, key: 'orb' }];
       items.forEach((w, i) => {
         const ownedAlready = w.key === 'orb' ? false : owns(w.id);
+        // Owned and unaffordable used to look identical (both greyed); now
+        // the shelf says which is which and how much cash is missing.
+        const short = !ownedAlready && money < w.price ? w.price - money : 0;
         const btn = document.createElement('button');
         btn.className = 'buy-item';
-        btn.disabled = ownedAlready || money < w.price;
-        btn.innerHTML = `<b>${i + 1}</b> ${w.name}<span>$${w.price}${ownedAlready ? ' · OWNED' : ''}</span>`;
+        btn.disabled = ownedAlready || short > 0;
+        btn.innerHTML = `<b>${i + 1}</b> ${w.name}<span${short ? ' class="short"' : ''}>$${w.price}${ownedAlready ? ' · OWNED' : short ? ` · NEED $${short} MORE` : ''}</span>`;
         btn.addEventListener('click', () => onBuy(w.id));
         buyShelf.appendChild(btn);
       });
